@@ -1,0 +1,22 @@
+{
+    "name": "admin-panel-ui",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "lucide-react": "^0.395.0",
+        "recharts": "^2.12.7"
+    },
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.1",
+        "vite": "^5.3.1"
+    }
+}

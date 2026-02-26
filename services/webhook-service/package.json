@@ -1,0 +1,12 @@
+{
+    "name": "webhook-service",
+    "version": "1.0.0",
+    "description": "Standardized event ingestion via webhooks for external integrations.",
+    "main": "index.js",
+    "dependencies": {
+        "express": "^4.19.2",
+        "kafkajs": "^2.2.4",
+        "dotenv": "^16.4.5",
+        "crypto": "^1.0.1"
+    }
+}
