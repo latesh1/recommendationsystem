@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, BarChart3, Activity, Zap, RefreshCw } from 'lucide-react';
+import { Settings, BarChart3, Activity, Zap, RefreshCw, Layers, User, Play, Star, CheckCircle2, ChevronDown } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const mockAnalytics = [
@@ -10,16 +10,36 @@ const mockAnalytics = [
     { name: '10:20', ctr: 0.22, wtime: 72 },
 ];
 
+const TEST_USERS = [
+    { id: '699fc111a2ca0a32d218f3b1', name: 'testuser1', icon: '👤' },
+    { id: '699fc222a2ca0a32d218f3b2', name: 'testuser2', icon: '👤' },
+    { id: '699fc58710d2c9880ccc9c70', name: 'testuser3', icon: '👤' },
+];
+
 export default function App() {
     const [configs, setConfigs] = useState([]);
+    const [recommendations, setRecommendations] = useState([]);
+    const [favorites, setFavorites] = useState(new Set());
+    const [subscriptions, setSubscriptions] = useState(new Set());
     const [syncing, setSyncing] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' or 'algorithm'
+    const [activeTab, setActiveTab] = useState('feed'); // 'feed', 'analytics' or 'algorithm'
+    const [selectedUserId, setSelectedUserId] = useState(TEST_USERS[2].id); // default testuser3
+    const [notification, setNotification] = useState(null);
     const debounceTimers = useRef({});
 
     useEffect(() => {
         fetchConfigs();
     }, []);
+
+    useEffect(() => {
+        fetchRecommendations();
+    }, [selectedUserId]);
+
+    const showNotification = (message) => {
+        setNotification(message);
+        setTimeout(() => setNotification(null), 3000);
+    };
 
     const fetchConfigs = async () => {
         setSyncing(true);
@@ -38,6 +58,71 @@ export default function App() {
             console.error('Failed to fetch configs', err);
             setSyncing(false);
             setLoading(false);
+        }
+    };
+
+    const fetchRecommendations = async () => {
+        setSyncing(true);
+        try {
+            const res = await fetch(`/api/recommendations/${selectedUserId}`, {
+                headers: {
+                    'x-api-key': 'master-saas-key-2026',
+                    'x-tenant-id': 'super-admin-master'
+                }
+            });
+            const data = await res.json();
+            setRecommendations(data || []);
+            setTimeout(() => setSyncing(false), 500);
+        } catch (err) {
+            console.error('Failed to fetch recommendations', err);
+            setSyncing(false);
+        }
+    };
+
+    const handleInteraction = async (streamId, type) => {
+        try {
+            await fetch('/api/interactions/track', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'master-saas-key-2026',
+                    'x-tenant-id': 'super-admin-master'
+                },
+                body: JSON.stringify({
+                    userId: selectedUserId,
+                    streamId: streamId,
+                    type: type, // CLICK or LIKE
+                    timestamp: new Date().toISOString()
+                })
+            });
+
+            if (type === 'LIKE') {
+                setFavorites(prev => {
+                    const next = new Set(prev);
+                    if (next.has(streamId)) {
+                        next.delete(streamId);
+                        showNotification('Removed from favorites');
+                    } else {
+                        next.add(streamId);
+                        showNotification('Added to favorites!');
+                    }
+                    return next;
+                });
+            } else if (type === 'CLICK') {
+                setSubscriptions(prev => {
+                    const next = new Set(prev);
+                    if (next.has(streamId)) {
+                        next.delete(streamId);
+                        showNotification('Unsubscribed successfully');
+                    } else {
+                        next.add(streamId);
+                        showNotification('Subscribed successfully!');
+                    }
+                    return next;
+                });
+            }
+        } catch (err) {
+            console.error('Failed to track interaction', err);
         }
     };
 
@@ -80,21 +165,53 @@ export default function App() {
                     },
                     body: JSON.stringify({ value })
                 });
+                // Refetch recommendations when weights change
+                fetchRecommendations();
             } catch (err) {
                 console.error('Update failed', err);
             }
-        }, 200);
+        }, 2000); // 2 second debounce for weight changes
     };
 
     if (loading && configs.length === 0) {
         return <div style={{ background: '#090910', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>Loading RecEngine...</div>;
     }
 
+    const currentUser = TEST_USERS.find(u => u.id === selectedUserId);
+
     return (
         <div className="dashboard-container">
+            {notification && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '2rem',
+                    right: '2rem',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--accent-primary)',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '12px',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                    zIndex: 1000,
+                    animation: 'slideUp 0.3s ease'
+                }}>
+                    <CheckCircle2 size={18} color="#10b981" />
+                    {notification}
+                </div>
+            )}
+
             <aside className="sidebar">
                 <h2 className="gradient-text" style={{ marginBottom: '2rem' }}>RecEngine</h2>
                 <nav>
+                    <div
+                        onClick={() => setActiveTab('feed')}
+                        className={`nav-item ${activeTab === 'feed' ? 'active' : ''}`}
+                    >
+                        <Layers size={20} /> <span>Personalized Feed</span>
+                    </div>
                     <div
                         onClick={() => setActiveTab('analytics')}
                         className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
@@ -105,7 +222,7 @@ export default function App() {
                         onClick={() => setActiveTab('algorithm')}
                         className={`nav-item ${activeTab === 'algorithm' ? 'active' : ''}`}
                     >
-                        <Settings size={20} /> <span>Algorithm</span>
+                        <Settings size={20} /> <span style={{ transition: 'all 0.3s ease' }}>Algorithm Tuning</span>
                     </div>
                 </nav>
             </aside>
@@ -113,23 +230,125 @@ export default function App() {
             <main className="main-content">
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                     <div>
-                        <h1>{activeTab === 'analytics' ? 'Dashboard Overview' : 'Algorithm Tuning'}</h1>
+                        <h1>
+                            {activeTab === 'feed' ? "User Experience Preview" :
+                                activeTab === 'analytics' ? 'System Performance' : 'Algorithm Tuning'}
+                        </h1>
                         <p style={{ color: 'var(--text-muted)' }}>
-                            {activeTab === 'analytics'
-                                ? 'Real-time recommendation performance analytics'
-                                : 'Configure recommendation weights and parameters'}
+                            {activeTab === 'feed' ? 'Live preview of "Recommended for You" results' :
+                                activeTab === 'analytics' ? 'Real-time recommendation performance analytics' :
+                                    'Configure recommendation weights and parameters'}
                         </p>
                     </div>
-                    <button
-                        onClick={fetchConfigs}
-                        className={`btn-primary ${syncing ? 'syncing-anim' : ''}`}
-                        disabled={syncing}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: syncing ? 0.7 : 1 }}
-                    >
-                        <RefreshCw size={18} className={syncing ? 'rotate-anim' : ''} />
-                        {syncing ? 'Syncing...' : 'Sync Config'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        {activeTab === 'feed' && (
+                            <div className="user-switcher" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px 12px', gap: '8px' }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>ACTIVE USER:</span>
+                                <select
+                                    value={selectedUserId}
+                                    onChange={(e) => setSelectedUserId(e.target.value)}
+                                    style={{ background: 'transparent', border: 'none', color: 'white', fontWeight: 700, cursor: 'pointer', outline: 'none' }}
+                                >
+                                    {TEST_USERS.map(user => (
+                                        <option key={user.id} value={user.id} style={{ background: 'var(--bg-card)', color: 'white' }}>{user.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => { fetchConfigs(); fetchRecommendations(); }}
+                            className={`btn-primary ${syncing ? 'syncing-anim' : ''}`}
+                            disabled={syncing}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: syncing ? 0.7 : 1 }}
+                        >
+                            <RefreshCw size={18} className={syncing ? 'rotate-anim' : ''} />
+                            {syncing ? 'Syncing...' : 'Refresh All'}
+                        </button>
+                    </div>
                 </header>
+
+                {activeTab === 'feed' && (
+                    <section>
+                        <div className="card" style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid var(--accent-primary)', position: 'relative', overflow: 'hidden' }}>
+                            <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '10px', borderRadius: '50%' }}>
+                                <User size={24} color="var(--accent-primary)" />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Previewing as</div>
+                                <div style={{ fontWeight: 700 }}>{currentUser?.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(UID: {selectedUserId.substring(0, 8)}...{selectedUserId.substring(selectedUserId.length - 2)})</span></div>
+                            </div>
+                            {syncing && (
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, height: '2px', background: 'var(--accent-primary)', width: '100%', animation: 'shimmer 1.5s infinite' }}></div>
+                            )}
+                        </div>
+
+                        {recommendations.length === 0 ? (
+                            <div className="card" style={{ textAlign: 'center', padding: '4rem' }}>
+                                <Zap size={48} color="var(--border)" style={{ marginBottom: '1rem' }} />
+                                <h3 style={{ color: 'var(--text-muted)' }}>No recommendations generated yet</h3>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Make sure streams are live and the engine is tuned.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem', opacity: syncing ? 0.5 : 1, transition: 'opacity 0.3s' }}>
+                                {recommendations.map((item, idx) => (
+                                    <div key={item.stream_id || idx} className="card" style={{ transition: 'all 0.3s ease', cursor: 'default', transform: syncing ? 'scale(0.98)' : 'scale(1)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                                            <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>
+                                                {item.category.toUpperCase()}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '0.8rem', fontWeight: 700 }}>
+                                                <Zap size={14} /> {(item.score * 100).toFixed(1)}% Match
+                                            </div>
+                                        </div>
+                                        <h4 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>{item.title || `Recommended Stream #${idx + 1}`}</h4>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', height: '3rem', overflow: 'hidden' }}>
+                                            Suggested because of <span style={{ color: 'var(--accent-secondary)' }}>{item.reason.replace(/_/g, ' ')}</span>
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                                onClick={() => handleInteraction(item.stream_id, 'CLICK')}
+                                                className={subscriptions.has(item.stream_id) ? "btn-secondary" : "btn-primary"}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px',
+                                                    fontSize: '0.8rem',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: '5px',
+                                                    background: subscriptions.has(item.stream_id) ? '#27272a' : undefined,
+                                                    border: subscriptions.has(item.stream_id) ? '1px solid var(--accent-primary)' : undefined,
+                                                    color: subscriptions.has(item.stream_id) ? 'var(--accent-primary)' : 'white',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                {subscriptions.has(item.stream_id) ? (
+                                                    <><CheckCircle2 size={14} /> Subscribed</>
+                                                ) : (
+                                                    <><Zap size={14} fill="white" /> Subscribe</>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => handleInteraction(item.stream_id, 'LIKE')}
+                                                style={{
+                                                    background: favorites.has(item.stream_id) ? 'rgba(168, 85, 247, 0.1)' : '#27272a',
+                                                    border: favorites.has(item.stream_id) ? '1px solid var(--accent-secondary)' : 'none',
+                                                    color: favorites.has(item.stream_id) ? 'var(--accent-secondary)' : 'white',
+                                                    padding: '8px',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                <Star size={16} fill={favorites.has(item.stream_id) ? "var(--accent-secondary)" : "none"} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
 
                 {activeTab === 'analytics' && (
                     <section className="card">
